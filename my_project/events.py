@@ -466,12 +466,11 @@ def do_news_bulletin(state: GameState, active_player: Player) -> str:
 def do_draw_building_card(state: GameState) -> str:
     """Refresh the pool by drawing a fresh card from the building deck.
 
-    Pool size stays at POOL_SIZE. The new card replaces the oldest pool
-    card with the SAME slot as the drawn card (so a slot-2 draw always
-    replaces a slot-2 pool card). If no pool card matches the drawn
-    card's slot, fall back to evicting the oldest pool card (FIFO).
-    Both the drawn slot and the index of the replacement are recorded in
-    the structured event data for the debug log.
+    Pool size stays at POOL_SIZE. Each card slot (1-4) maps to a fixed pool
+    position (indices 0-3): slot 1 → index 0, slot 2 → index 1, etc.
+    A drawn card replaces whatever card is currently at its slot position.
+    The drawn slot and the replacement index are recorded in the structured
+    event data for the debug log.
     """
     if not state.deck.cards and not state.deck.discard:
         _record_event_line(state, kind="header", text="Draw Building Card (deck empty)")
@@ -484,30 +483,23 @@ def do_draw_building_card(state: GameState) -> str:
     evicted_name = None
     evicted_slot: int | None = None
     replaced_pool_idx: int | None = None
-    replaced_via_fallback = False
     if state.pool:
-        # Find the first pool card whose slot matches the drawn card's
-        # slot. This keeps the pool visually stable: a slot-2 draw
-        # replaces a slot-2 card in place. If nothing matches, fall back
-        # to FIFO eviction of the oldest pool card.
-        slot_match_idx = next(
-            (i for i, c in enumerate(state.pool) if c.slot == new_card.slot),
-            None,
-        )
-        if slot_match_idx is not None:
-            evict_idx = slot_match_idx
+        # Card slot (1-4) maps directly to pool position (0-3).
+        # A slot-2 card always goes to pool index 1, replacing whatever is there.
+        evict_idx = new_card.slot - 1
+        if evict_idx < len(state.pool):
+            evicted = state.pool[evict_idx]
+            evicted_name = evicted.building
+            evicted_slot = evicted.slot
+            replaced_pool_idx = evict_idx
+            # Swap in place so the pool slot order stays stable. CardZone
+            # logs this as a single-index mutation, matching the event's
+            # actual semantics better than pop+append.
+            state.pool[evict_idx] = new_card
+            state.deck.discard.append(evicted)
         else:
-            evict_idx = 0  # FIFO fallback — no matching slot in pool
-            replaced_via_fallback = True
-        evicted = state.pool[evict_idx]
-        evicted_name = evicted.building
-        evicted_slot = evicted.slot
-        replaced_pool_idx = evict_idx
-        # Swap in place so the pool slot order stays stable. CardZone
-        # logs this as a single-index mutation, matching the event's
-        # actual semantics better than pop+append.
-        state.pool[evict_idx] = new_card
-        state.deck.discard.append(evicted)
+            # Pool smaller than slot number (shouldn't happen in normal play)
+            state.pool.append(new_card)
     else:
         state.pool.append(new_card)
     evict_text = (
@@ -521,12 +513,11 @@ def do_draw_building_card(state: GameState) -> str:
     )
     # Debug line so the mutation log makes the slot mapping obvious.
     if replaced_pool_idx is not None:
-        fallback_note = " [fallback: no slot match, FIFO]" if replaced_via_fallback else ""
         _record_event_line(
             state, kind="detail",
             text=(
-                f"  slot {new_card.slot} → pool[{replaced_pool_idx + 1}] "
-                f"(evicted slot {evicted_slot}){fallback_note}"
+                f"  slot {new_card.slot} → pool[{replaced_pool_idx}] "
+                f"(evicted slot {evicted_slot})"
             ),
         )
     # Store structured data
@@ -536,7 +527,6 @@ def do_draw_building_card(state: GameState) -> str:
         "card_replaced": evicted_name,
         "card_replaced_slot": evicted_slot,
         "pool_idx": replaced_pool_idx,
-        "replaced_via_fallback": replaced_via_fallback,
         "rates": [{
             "resource": ra.resource.value,
             "amount": ra.amount,
@@ -897,7 +887,6 @@ def _build_event_structured(
         d["card_replaced"] = draw_data.get("card_replaced")
         d["card_replaced_slot"] = draw_data.get("card_replaced_slot")
         d["pool_idx"] = draw_data.get("pool_idx")
-        d["replaced_via_fallback"] = draw_data.get("replaced_via_fallback", False)
         d["card_rates"] = draw_data.get("rates", [])
         d["card_costs"] = draw_data.get("costs", [])
         d["card_effect"] = draw_data.get("effect")

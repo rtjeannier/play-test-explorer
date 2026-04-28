@@ -490,8 +490,27 @@ game
   function handleRemotePoolSwap(peerId, msg) {
     const seatIdx = MP.clientSeats[peerId];
     if (seatIdx === undefined || MP.currentState.current_player_index !== seatIdx) return;
+
+    // Capture card names before swap
+    const player = MP.currentState?.players?.[seatIdx];
+    const handCard = player?.hand?.[msg.hand_idx];
+    const poolCard = MP.currentState?.pool?.[msg.pool_idx];
+    const handCardName = handCard?.building || "?";
+    const poolCardName = poolCard?.building || "?";
+
     MP.game.human_pool_swap(msg.hand_idx, msg.pool_idx);
     hostRefreshState();
+
+    // Add swap to event feed
+    const playerName = player?.name || "Player";
+    addFeedEntry({
+      kind: "free-action",
+      text: `${playerName}: Swapped ${handCardName} ↔ ${poolCardName}`
+    });
+    MP.network.broadcastFeed({
+      kind: "free-action",
+      text: `${playerName}: Swapped ${handCardName} ↔ ${poolCardName}`
+    });
   }
 
   // ===== Prompt Collection =====

@@ -278,11 +278,10 @@ class TestDrawBuildingCard:
         assert data["card_drawn_slot"] == 3
         assert data["card_replaced_slot"] == 3
         assert data["pool_idx"] == 2
-        assert data["replaced_via_fallback"] is False
 
-    def test_draw_building_falls_back_to_fifo_when_no_slot_match(self):
-        """If no pool card shares the drawn card's slot, fall back to
-        evicting the oldest pool card (index 0)."""
+    def test_draw_building_places_at_slot_position(self):
+        """A drawn card goes to its slot position. Slot 1 → index 0,
+        Slot 2 → index 1, etc. Regardless of what card was previously there."""
         from my_project.models import Card as _Card
         cards, contracts = _load()
         state = GameState.create(cards, contracts)
@@ -293,18 +292,20 @@ class TestDrawBuildingCard:
                 costs=[], rates=[], effect="",
                 can_sell=[Resource.H2O], can_fulfill_contract=False,
             )
-        # Pool has only slot-1 cards; drawn card is slot 3 → no match
+        # Pool has only slot-1 cards; drawn card is slot 3 → goes to index 2
         state.pool.replace([_mk(1, "A"), _mk(1, "B"), _mk(1, "C"), _mk(1, "D")])
         state.deck.cards.append(_mk(3, "S3"))
 
         execute_event(state, _ec(EventType.DRAW_BUILDING_CARD), state.players[0])
 
-        # FIFO: index 0 evicted
-        assert state.pool[0].building == "S3"
+        # Slot 3 card goes to index 2, replacing the slot-1 card there
+        assert state.pool[0].building == "A"
         assert state.pool[1].building == "B"
+        assert state.pool[2].building == "S3"  # Slot 3 → index 2
+        assert state.pool[3].building == "D"
         data = state._last_event_data
-        assert data["replaced_via_fallback"] is True
-        assert data["pool_idx"] == 0
+        assert data["pool_idx"] == 2
+        assert data["card_replaced_slot"] == 1  # Previous card was slot 1
 
 
 # --- Redraw cascade ---

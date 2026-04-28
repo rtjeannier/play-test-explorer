@@ -709,6 +709,12 @@
     MP._v2SellResource = null;
     MP._v2CardIntent = null;
 
+    // Capture card names before swap
+    const handCard = MP.currentState?.players?.[MP.mySeat]?.hand?.[handIdx];
+    const poolCard = MP.currentState?.pool?.[poolIdx];
+    const handCardName = handCard?.building || "?";
+    const poolCardName = poolCard?.building || "?";
+
     // Capture positions before swap
     const handEl = document.querySelectorAll("#mp-hand-grid .hand-card")[handIdx];
     const poolEl = document.querySelectorAll("#mp-pool-grid .pool-card")[poolIdx];
@@ -732,10 +738,24 @@
     const ANIM_DELAY = 420;
     if (MP.role === "host") {
       MP.game.human_pool_swap(parseInt(handIdx), parseInt(poolIdx));
-      setTimeout(() => MP.core.hostRefreshState(), ANIM_DELAY);
+      setTimeout(() => {
+        MP.core.hostRefreshState();
+        // Add swap to event feed
+        const playerName = MP.currentState?.players?.[MP.mySeat]?.name || "Player";
+        MP.core.addFeedEntry({
+          kind: "free-action",
+          text: `${playerName}: Swapped ${handCardName} ↔ ${poolCardName}`
+        });
+      }, ANIM_DELAY);
     } else {
       setTimeout(() => {
         MP.hostConn.send(JSON.stringify({type: "pool_swap", hand_idx: parseInt(handIdx), pool_idx: parseInt(poolIdx)}));
+        // Add swap to event feed
+        const playerName = MP.currentState?.players?.[MP.mySeat]?.name || "Player";
+        MP.core.addFeedEntry({
+          kind: "free-action",
+          text: `${playerName}: Swapped ${handCardName} ↔ ${poolCardName}`
+        });
       }, ANIM_DELAY);
     }
   }
