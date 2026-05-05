@@ -740,22 +740,17 @@
       MP.game.human_pool_swap(parseInt(handIdx), parseInt(poolIdx));
       setTimeout(() => {
         MP.core.hostRefreshState();
-        // Add swap to event feed
         const playerName = MP.currentState?.players?.[MP.mySeat]?.name || "Player";
-        MP.core.addFeedEntry({
+        const entry = {
           kind: "free-action",
           text: `${playerName}: Swapped ${handCardName} ↔ ${poolCardName}`
-        });
+        };
+        MP.core.addFeedEntry(entry);
+        MP.network.broadcastFeed(entry);
       }, ANIM_DELAY);
     } else {
       setTimeout(() => {
         MP.hostConn.send(JSON.stringify({type: "pool_swap", hand_idx: parseInt(handIdx), pool_idx: parseInt(poolIdx)}));
-        // Add swap to event feed
-        const playerName = MP.currentState?.players?.[MP.mySeat]?.name || "Player";
-        MP.core.addFeedEntry({
-          kind: "free-action",
-          text: `${playerName}: Swapped ${handCardName} ↔ ${poolCardName}`
-        });
       }, ANIM_DELAY);
     }
   }
