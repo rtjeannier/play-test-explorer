@@ -1001,14 +1001,8 @@
     const weBody = `<button id="pa-we-btn" class="action-btn" ${weCanUse ? "" : "disabled"}>Use WE</button>`;
 
     const nano = pa.nanotechnology || {};
-    const pool = s.pool || [];
-    const nanoOpts = pool.map((c, i) => `<option value="${i}">${i + 1}: ${c.building}</option>`).join("");
-    const nanoCanUse = myTurn && nano.owned && nano.available && pool.length > 0;
-    const nanoBody = `
-      <select id="pa-nano-card" class="toggle-select" ${nanoCanUse ? "" : "disabled"}>
-        ${nanoOpts || '<option value="">empty</option>'}
-      </select>
-      <button id="pa-nano-btn" class="action-btn" ${nanoCanUse ? "" : "disabled"}>Replace</button>`;
+    const nanoCanUse = myTurn && nano.owned && nano.available;
+    const nanoBody = `<button id="pa-nano-btn" class="action-btn" ${nanoCanUse ? "" : "disabled"}>Draw Card</button>`;
 
     const tele = pa.teleportation || {};
     const teleOpts = (tele.valid_resources || []).map(r => `<option value="${r}">${r}</option>`).join("");
@@ -1021,7 +1015,7 @@
 
     const parts = [
       row(we.owned, weCanUse, "Water Engine", "-1 H2O, +2 PWR.", weBody),
-      row(nano.owned, nanoCanUse, "Nanotechnology", "replace a pool card.", nanoBody),
+      row(nano.owned, nanoCanUse, "Nanotechnology", "draw a card, replace pool slot.", nanoBody),
       row(tele.owned, teleCanUse, "Teleportation", "sell any resource, -1 PWR.", teleBody),
     ];
 
@@ -1032,9 +1026,8 @@
       sendPatentAction("water_engine", {});
     });
     document.getElementById("pa-nano-btn")?.addEventListener("click", () => {
-      const idx = parseInt(document.getElementById("pa-nano-card")?.value);
-      if (isNaN(idx)) return;
-      sendPatentAction("nanotech", {pool_idx: idx});
+      console.log("Nanotechnology button clicked");
+      sendPatentAction("nanotech", {});
     });
     document.getElementById("pa-tele-btn")?.addEventListener("click", () => {
       const r = document.getElementById("pa-tele-resource")?.value;
@@ -1058,7 +1051,7 @@
           result = MP.game.use_water_engine(MP.mySeat).toJs({dict_converter: Object.fromEntries});
           break;
         case "nanotech":
-          result = MP.game.use_nanotechnology(MP.mySeat, params.pool_idx).toJs({dict_converter: Object.fromEntries});
+          result = MP.game.use_nanotechnology(MP.mySeat).toJs({dict_converter: Object.fromEntries});
           break;
         case "oc":
           result = MP.game.use_optimization_center(MP.mySeat, params.resource).toJs({dict_converter: Object.fromEntries});

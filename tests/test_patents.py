@@ -731,26 +731,43 @@ class TestWaterEngine:
 
 
 class TestNanotechnology:
-    def test_replaces_pool_card_with_deck_draw(self):
+    def test_replaces_pool_card_at_drawn_card_slot(self):
+        from my_project.models import Card as _Card
         game = _make_game_with_human()
         p = game.state.players[0]
         p.buildings_played.append(_patent("Nanotechnology"))
+
+        # Create a controlled pool with known slots
+        def _mk(slot: int, name: str) -> _Card:
+            return _Card(
+                alternate="H2O/FE", slot=slot, building=name,
+                costs=[], rates=[], effect="",
+                can_sell=[], can_fulfill_contract=False,
+            )
+        game.state.pool.replace([_mk(1, "S1"), _mk(2, "S2"), _mk(3, "S3"), _mk(4, "S4")])
+
+        # Stack the deck with a known card
+        slot3_card = _mk(3, "NEW_S3")
+        game.state.deck.cards.append(slot3_card)
+
         pool_before = len(game.state.pool)
-        target = game.state.pool[1]
-        result = game.use_nanotechnology(0, 1)
+        old_s3 = game.state.pool[2]
+        result = game.use_nanotechnology(0)
         assert result["ok"]
-        # Pool size unchanged: -1 + 1 = same
+        # Pool size unchanged
         assert len(game.state.pool) == pool_before
-        # The targeted card landed in the discard pile
-        assert target in game.state.deck.discard
+        # Slot 3 card was replaced (pool[2] since slot 1 → index 0, slot 3 → index 2)
+        assert game.state.pool[2].building == "NEW_S3"
+        # Old slot 3 card is in discard
+        assert old_s3 in game.state.deck.discard
         assert p.has_used_nanotechnology_this_turn
 
     def test_use_blocked_when_already_used(self):
         game = _make_game_with_human()
         p = game.state.players[0]
         p.buildings_played.append(_patent("Nanotechnology"))
-        game.use_nanotechnology(0, 0)
-        result = game.use_nanotechnology(0, 0)
+        game.use_nanotechnology(0)
+        result = game.use_nanotechnology(0)
         assert not result["ok"]
 
     def test_empty_pool_blocked(self):
@@ -758,16 +775,19 @@ class TestNanotechnology:
         p = game.state.players[0]
         p.buildings_played.append(_patent("Nanotechnology"))
         game.state.pool = []
-        result = game.use_nanotechnology(0, 0)
+        result = game.use_nanotechnology(0)
         assert not result["ok"]
         assert "empty" in result["reason"].lower()
 
-    def test_invalid_pool_index_blocked(self):
+    def test_empty_deck_blocked(self):
         game = _make_game_with_human()
         p = game.state.players[0]
         p.buildings_played.append(_patent("Nanotechnology"))
-        result = game.use_nanotechnology(0, 99)
+        game.state.deck.cards = []
+        result = game.use_nanotechnology(0)
         assert not result["ok"]
+        assert "empty" in result["reason"].lower()
+
 
 
 class TestTeleportation:

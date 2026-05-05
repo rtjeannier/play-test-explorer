@@ -2043,40 +2043,43 @@ def _execute_free_actions(state: GameState, player: Player) -> list[str]:
                 state.log.end()
                 fired.append(f"Teleportation: sold {rate} {best.value} for ${revenue}, -1 PWR (cost ${pwr_cost:.0f})")
 
-    # Nanotechnology: replace the least useful pool card with a deck draw
-    # if the worst pool card is below the average deck value.
+    # Nanotechnology: draw a card from the deck, replace the pool card at
+    # the slot position indicated by the drawn card, if that offers value.
     if (
         _player_owns_patent(player, "Nanotechnology")
         and not player.has_used_nanotechnology_this_turn
         and state.pool
+        and state.deck.cards
     ):
         from my_project.strategies import _card_value
 
-        worst_idx = min(
-            range(len(state.pool)),
-            key=lambda i: _card_value(state.pool[i], player, state),
-        )
-        worst_val = _card_value(state.pool[worst_idx], player, state)
+        drawn = state.deck.draw(1)
+        if drawn:
+            drawn_card = drawn[0]
+            pool_idx = drawn_card.slot - 1
+            if 0 <= pool_idx < len(state.pool):
+                old_card = state.pool[pool_idx]
+                old_val = _card_value(old_card, player, state)
+                new_val = _card_value(drawn_card, player, state)
+                if new_val > old_val:
+                    state.log.begin(
+                        "free:nanotech",
+                        player.name,
+                        pidx,
+                        f"Nanotech: draw {drawn_card.building} (slot {drawn_card.slot}), replace {old_card.building}",
+                    )
+                    state.pool[pool_idx] = drawn_card
+                    state.deck.discard.append(old_card)
+                    player.has_used_nanotechnology_this_turn = True
+                    state.log.end()
+                    fired.append(f"Nanotechnology: replaced {old_card.building} with {drawn_card.building}")
+                else:
+                    # Card is not valuable enough, put it back on deck
+                    state.deck.cards.append(drawn_card)
+            else:
+                # Invalid slot, put card back
+                state.deck.cards.append(drawn_card)
 
-        # Compute average value of cards in the deck (what we'd expect to draw)
-        deck_cards = state.deck.cards
-        if deck_cards:
-            avg_deck_val = sum(
-                _card_value(c, player, state) for c in deck_cards
-            ) / len(deck_cards)
-        else:
-            avg_deck_val = 0.0
-
-        if worst_val < avg_deck_val:
-            state.log.begin("free:nanotech", player.name, pidx, f"Nanotech: replace {state.pool[worst_idx].building}")
-            discarded = state.pool.pop(worst_idx)
-            state.deck.discard.append(discarded)
-            drawn = state.deck.draw(1)
-            state.pool.extend(drawn)
-            player.has_used_nanotechnology_this_turn = True
-            new_name = drawn[0].building if drawn else "(empty)"
-            state.log.end()
-            fired.append(f"Nanotechnology: replaced pool card {discarded.building} with {new_name}")
 
     return fired
 

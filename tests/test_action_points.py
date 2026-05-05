@@ -332,6 +332,7 @@ class TestFreeActionsDoNotCount:
         p.buildings_played.append(nano_card)
         game.begin_human_turn()
         spent_before = p.cards_spent_this_turn
-        result = game.use_nanotechnology(0, 0)
+        result = game.use_nanotechnology(0)
         assert result["ok"]
         assert p.cards_spent_this_turn == spent_before
+

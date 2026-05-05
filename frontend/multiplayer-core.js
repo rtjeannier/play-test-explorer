@@ -466,7 +466,7 @@ game
         result = MP.game.use_water_engine(seatIdx).toJs({dict_converter: Object.fromEntries});
         break;
       case "nanotech":
-        result = MP.game.use_nanotechnology(seatIdx, msg.pool_idx).toJs({dict_converter: Object.fromEntries});
+        result = MP.game.use_nanotechnology(seatIdx).toJs({dict_converter: Object.fromEntries});
         break;
       case "oc":
         result = MP.game.use_optimization_center(seatIdx, msg.resource).toJs({dict_converter: Object.fromEntries});

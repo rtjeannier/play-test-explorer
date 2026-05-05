@@ -890,9 +890,9 @@ class PlayableGame:
             **_nw_snapshot(player),
         }
 
-    def use_nanotechnology(self, seat_idx: int, pool_idx: int) -> dict:
-        """Nanotechnology: discard ONE pool card, replace with a deck draw.
-        Once per turn."""
+    def use_nanotechnology(self, seat_idx: int) -> dict:
+        """Nanotechnology: draw a card from the deck, replace the pool card
+        at the slot position indicated by the drawn card. Once per turn."""
         if seat_idx not in self._human_indices:
             return {"ok": False, "reason": "Not a human seat"}
         player = self.state.players[seat_idx]
@@ -902,23 +902,33 @@ class PlayableGame:
             return {"ok": False, "reason": "Already used this turn"}
         if not self.state.pool:
             return {"ok": False, "reason": "Pool is empty"}
-        if pool_idx < 0 or pool_idx >= len(self.state.pool):
-            return {"ok": False, "reason": f"Invalid pool index: {pool_idx}"}
+        if not self.state.deck.cards:
+            return {"ok": False, "reason": "Deck is empty"}
         pidx = self.state.players.index(player)
-        self.state.log.begin("free:nanotech", player.name, pidx, f"Nanotech: replace pool[{pool_idx}]")
-        discarded = self.state.pool.pop(pool_idx)
-        self.state.deck.discard.append(discarded)
         drawn = self.state.deck.draw(1)
-        self.state.pool.extend(drawn)
+        if not drawn:
+            return {"ok": False, "reason": "Deck is empty"}
+        drawn_card = drawn[0]
+        pool_idx = drawn_card.slot - 1
+        if pool_idx < 0 or pool_idx >= len(self.state.pool):
+            return {"ok": False, "reason": f"Invalid pool slot: {drawn_card.slot}"}
+        self.state.log.begin(
+            "free:nanotech",
+            player.name,
+            pidx,
+            f"Nanotech: draw {drawn_card.building} (slot {drawn_card.slot}), replace pool[{pool_idx}]",
+        )
+        discarded = self.state.pool[pool_idx]
+        self.state.pool[pool_idx] = drawn_card
+        self.state.deck.discard.append(discarded)
         player.has_used_nanotechnology_this_turn = True
-        new_name = drawn[0].building if drawn else "(deck empty)"
         self.state.log.end()
         return {
             "ok": True,
             "type": "patent",
             "detail": (
-                f"Nanotechnology: replaced pool card {discarded.building} "
-                f"with {new_name}"
+                f"Nanotechnology: replaced {discarded.building} "
+                f"with {drawn_card.building}"
             ),
             **_nw_snapshot(player),
         }
@@ -1519,7 +1529,12 @@ class PlayableGame:
             "nanotechnology": {
                 "owned": nano_owned,
                 "used": player.has_used_nanotechnology_this_turn,
-                "available": nano_owned and not player.has_used_nanotechnology_this_turn and bool(self.state.pool),
+                "available": (
+                    nano_owned
+                    and not player.has_used_nanotechnology_this_turn
+                    and bool(self.state.pool)
+                    and self.state.deck.remaining() > 0
+                ),
             },
             "teleportation": {
                 "owned": tele_owned,
